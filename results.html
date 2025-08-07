@@ -1,0 +1,800 @@
+{% extends "base.html" %} {% block title %}Results - Reconciliation Tool{%
+endblock %} {% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<style>
+  .metric-card {
+    background: linear-gradient(
+      135deg,
+      var(--white) 0%,
+      var(--hsbc-light) 100%
+    );
+    border-left: 4px solid var(--hsbc-teal);
+    transition:
+      transform 0.3s ease,
+      box-shadow 0.3s ease;
+  }
+  .metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  .chart-container {
+    position: relative;
+    height: 300px;
+    margin-bottom: 2rem;
+  }
+  .data-grid {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--hsbc-light);
+  }
+  .data-grid table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .data-grid th {
+    background-color: var(--hsbc-primary);
+    color: var(--white);
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .data-grid td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--hsbc-light);
+  }
+  .data-grid tr:hover {
+    background-color: var(--hsbc-light);
+  }
+  .progress-ring {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto;
+  }
+  .progress-ring-circle {
+    stroke: var(--hsbc-light);
+    stroke-width: 8;
+    fill: transparent;
+    r: 52;
+    cx: 60;
+    cy: 60;
+  }
+  .progress-ring-progress {
+    stroke: var(--hsbc-teal);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 326.56;
+    stroke-dashoffset: 326.56;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: stroke-dashoffset 2s ease-in-out;
+  }
+</style>
+{% endblock %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1>Reconciliation Results</h1>
+    <p style="color: var(--gray); margin: 0">
+      Run ID: <code>{{ run_id }}</code>
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline" onclick="downloadResults()">
+      <i class="fas fa-download"></i> Download Results
+    </button>
+    <button class="btn btn-secondary" onclick="exportToPDF()">
+      <i class="fas fa-file-pdf"></i> Export PDF
+    </button>
+    <a href="/recent-runs" class="btn btn-primary">
+      <i class="fas fa-arrow-left"></i> Back to Runs
+    </a>
+  </div>
+</div>
+
+<!-- Run Configuration Summary -->
+<div class="card mb-3">
+  <div class="card-header"><i class="fas fa-cog"></i> Run Configuration</div>
+  <div class="card-body">
+    <div id="runConfig">
+      <div class="text-center">
+        <i
+          class="fas fa-spinner fa-spin"
+          style="font-size: 1.5rem; color: var(--hsbc-primary)"
+        ></i>
+        <p>Loading run configuration...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="row mb-3">
+  <div class="col-3">
+    <div class="card metric-card">
+      <div class="card-body text-center">
+        <div class="progress-ring">
+          <svg class="progress-ring" viewBox="0 0 120 120">
+            <circle class="progress-ring-circle"></circle>
+            <circle
+              class="progress-ring-progress"
+              id="matchRateCircle"
+            ></circle>
+          </svg>
+        </div>
+        <h3
+          id="matchRateValue"
+          style="color: var(--hsbc-teal); margin-top: 1rem"
+        >
+          --
+        </h3>
+        <p style="color: var(--gray); margin: 0">Match Rate</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-9">
+    <div class="row">
+      <div class="col-4">
+        <div class="card metric-card">
+          <div class="card-body text-center">
+            <i
+              class="fas fa-database"
+              style="
+                font-size: 2.5rem;
+                color: var(--hsbc-primary);
+                margin-bottom: 0.5rem;
+              "
+            ></i>
+            <h3 id="totalRecords" style="color: var(--hsbc-primary)">--</h3>
+            <p style="color: var(--gray); margin: 0">Total Records</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card metric-card">
+          <div class="card-body text-center">
+            <i
+              class="fas fa-check-circle"
+              style="
+                font-size: 2.5rem;
+                color: var(--hsbc-teal);
+                margin-bottom: 0.5rem;
+              "
+            ></i>
+            <h3 id="matchedRecords" style="color: var(--hsbc-teal)">--</h3>
+            <p style="color: var(--gray); margin: 0">Matched Records</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card metric-card">
+          <div class="card-body text-center">
+            <i
+              class="fas fa-times-circle"
+              style="
+                font-size: 2.5rem;
+                color: var(--hsbc-red);
+                margin-bottom: 0.5rem;
+              "
+            ></i>
+            <h3 id="unmatchedRecords" style="color: var(--hsbc-red)">--</h3>
+            <p style="color: var(--gray); margin: 0">Unmatched Records</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts and Analytics -->
+<div class="row mb-3">
+  <div class="col-6">
+    <div class="card">
+      <div class="card-header">
+        <i class="fas fa-chart-pie"></i> Match Distribution
+      </div>
+      <div class="card-body">
+        <div class="chart-container">
+          <canvas id="matchDistributionChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6">
+    <div class="card">
+      <div class="card-header">
+        <i class="fas fa-chart-line"></i> Processing Timeline
+      </div>
+      <div class="card-body">
+        <div class="chart-container">
+          <canvas id="timelineChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Additional Metrics -->
+<div class="row mb-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <i class="fas fa-tachometer-alt"></i> Performance Metrics
+      </div>
+      <div class="card-body">
+        <div class="row" id="performanceMetrics">
+          <!-- Performance metrics will be populated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Data Grid View -->
+<div class="card mb-3">
+  <div class="card-header">
+    <div class="d-flex justify-content-between align-items-center">
+      <span
+        ><i class="fas fa-table"></i> Reconciliation Results - Data View</span
+      >
+      <div>
+        <select
+          id="groupByColumn"
+          class="form-select"
+          style="
+            display: inline-block;
+            width: auto;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+          "
+        >
+          <option value="">No Grouping</option>
+          <option value="match_status">Group by Match Status</option>
+          <option value="confidence_level">Group by Confidence Level</option>
+          <option value="dataset_source">Group by Dataset Source</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="card-body" style="padding: 0">
+    <div class="data-grid">
+      <table>
+        <thead>
+          <tr>
+            <th>Record ID</th>
+            <th>Original Value</th>
+            <th>Transformed Value</th>
+            <th>Match Status</th>
+            <th>Confidence</th>
+            <th>Variance</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="dataGridBody">
+          <tr>
+            <td colspan="7" class="text-center" style="padding: 2rem">
+              <i
+                class="fas fa-spinner fa-spin"
+                style="font-size: 1.5rem; color: var(--hsbc-primary)"
+              ></i>
+              <p>Loading data...</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div
+      class="p-3"
+      style="background-color: var(--hsbc-light); border-top: 1px solid #ddd"
+    >
+      <div class="d-flex justify-content-between align-items-center">
+        <span style="color: var(--gray)"
+          >Showing <span id="recordCount">0</span> records</span
+        >
+        <div>
+          <button
+            class="btn btn-outline"
+            style="padding: 0.25rem 0.5rem; font-size: 0.875rem"
+            onclick="loadMoreRecords()"
+          >
+            Load More
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_scripts %}
+<script>
+  let runData = null;
+  let resultsData = null;
+  let currentRecords = [];
+
+  document.addEventListener("DOMContentLoaded", function () {
+    loadResultsData();
+    setupGrouping();
+  });
+
+  async function loadResultsData() {
+    const runId = "{{ run_id }}";
+
+    try {
+      // Load run details
+      runData = await apiCall(`/api/runs/${runId}`);
+      renderRunConfig(runData);
+
+      // Load results data
+      resultsData = await apiCall(`/api/runs/${runId}/results`);
+      renderMetrics(resultsData);
+      renderCharts(resultsData);
+      renderDataGrid();
+    } catch (error) {
+      console.error("Failed to load results data:", error);
+      document.querySelector(".main-content").innerHTML = `
+            <div class="text-center p-3">
+                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--hsbc-red);"></i>
+                <h3 style="color: var(--hsbc-red); margin-top: 1rem;">Failed to Load Results</h3>
+                <p>Unable to load reconciliation results for run ${runId}</p>
+                <a href="/recent-runs" class="btn btn-primary">Back to Runs</a>
+            </div>
+        `;
+    }
+  }
+
+  function renderRunConfig(run) {
+    const container = document.getElementById("runConfig");
+
+    container.innerHTML = `
+        <div class="row">
+            <div class="col-4">
+                <h6 style="color: var(--hsbc-primary); margin-bottom: 0.5rem;">Datasets</h6>
+                <p style="margin: 0.25rem 0;"><i class="fas fa-database" style="color: var(--hsbc-teal);"></i> <strong>Original:</strong> ${run.dataset1}</p>
+                <p style="margin: 0.25rem 0;"><i class="fas fa-exchange-alt" style="color: var(--hsbc-blue);"></i> <strong>Transformed:</strong> ${run.dataset2}</p>
+            </div>
+            <div class="col-4">
+                <h6 style="color: var(--hsbc-primary); margin-bottom: 0.5rem;">Configuration</h6>
+                <p style="margin: 0.25rem 0;"><strong>Method:</strong> ${run.matching_method}</p>
+                ${run.num_cdes ? `<p style="margin: 0.25rem 0;"><strong>CDEs:</strong> ${run.num_cdes}</p>` : ""}
+                <p style="margin: 0.25rem 0;"><strong>Started:</strong> ${formatDate(run.timestamp)}</p>
+                <p style="margin: 0.25rem 0;"><strong>Duration:</strong> ${run.duration}</p>
+            </div>
+            <div class="col-4">
+                <h6 style="color: var(--hsbc-primary); margin-bottom: 0.5rem;">Status</h6>
+                <p style="margin: 0.25rem 0;">
+                    <span class="badge" style="background-color: var(--hsbc-teal); color: var(--white); padding: 0.25rem 0.5rem;">
+                        ${run.status}
+                    </span>
+                </p>
+                <p style="margin: 0.25rem 0;"><strong>Run ID:</strong> <code style="font-size: 0.75rem;">${run.id}</code></p>
+            </div>
+        </div>
+    `;
+  }
+
+  function renderMetrics(results) {
+    const { summary } = results;
+
+    // Update metric values
+    document.getElementById("totalRecords").textContent = formatNumber(
+      summary.total_records,
+    );
+    document.getElementById("matchedRecords").textContent = formatNumber(
+      summary.matched_records,
+    );
+    document.getElementById("unmatchedRecords").textContent = formatNumber(
+      summary.unmatched_records,
+    );
+    document.getElementById("matchRateValue").textContent =
+      `${summary.match_rate.toFixed(1)}%`;
+
+    // Animate the progress ring
+    const circle = document.getElementById("matchRateCircle");
+    const circumference = 2 * Math.PI * 52;
+    const offset = circumference - (summary.match_rate / 100) * circumference;
+    circle.style.strokeDashoffset = offset;
+
+    // Render performance metrics
+    const performanceContainer = document.getElementById("performanceMetrics");
+    performanceContainer.innerHTML = results.metrics
+      .map(
+        (metric) => `
+        <div class="col-3">
+            <div class="text-center">
+                <div style="font-size: 1.5rem; font-weight: bold; color: var(--hsbc-primary);">
+                    ${formatNumber(metric.value)}${metric.unit}
+                </div>
+                <small style="color: var(--gray);">${metric.name}</small>
+            </div>
+        </div>
+    `,
+      )
+      .join("");
+  }
+
+  function renderCharts(results) {
+    // Match Distribution Pie Chart
+    const ctx1 = document
+      .getElementById("matchDistributionChart")
+      .getContext("2d");
+    new Chart(ctx1, {
+      type: "doughnut",
+      data: {
+        labels: results.chart_data.match_distribution.map(
+          (item) => item.category,
+        ),
+        datasets: [
+          {
+            data: results.chart_data.match_distribution.map(
+              (item) => item.count,
+            ),
+            backgroundColor: [
+              "var(--hsbc-teal)",
+              "var(--hsbc-blue)",
+              "var(--hsbc-red)",
+            ],
+            borderWidth: 2,
+            borderColor: "var(--white)",
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {
+              padding: 20,
+              usePointStyle: true,
+              font: {
+                size: 12,
+              },
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                return `${context.label}: ${formatNumber(context.parsed)} (${percentage}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Timeline Chart
+    const ctx2 = document.getElementById("timelineChart").getContext("2d");
+    new Chart(ctx2, {
+      type: "line",
+      data: {
+        labels: results.chart_data.time_series.map((item) => item.timestamp),
+        datasets: [
+          {
+            label: "Matches Processed",
+            data: results.chart_data.time_series.map((item) => item.matches),
+            borderColor: "var(--hsbc-teal)",
+            backgroundColor: "rgba(0, 132, 127, 0.1)",
+            tension: 0.4,
+            fill: true,
+            pointBackgroundColor: "var(--hsbc-teal)",
+            pointBorderColor: "var(--white)",
+            pointBorderWidth: 2,
+            pointRadius: 6,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            mode: "index",
+            intersect: false,
+          },
+        },
+        scales: {
+          x: {
+            display: true,
+            grid: {
+              display: false,
+            },
+            ticks: {
+              font: {
+                size: 11,
+              },
+            },
+          },
+          y: {
+            display: true,
+            grid: {
+              color: "var(--hsbc-light)",
+            },
+            ticks: {
+              font: {
+                size: 11,
+              },
+              callback: function (value) {
+                return formatNumber(value);
+              },
+            },
+          },
+        },
+        interaction: {
+          mode: "nearest",
+          axis: "x",
+          intersect: false,
+        },
+      },
+    });
+  }
+
+  function renderDataGrid() {
+    // Generate mock data for the data grid
+    const mockData = generateMockDataGridData(100);
+    currentRecords = mockData;
+    displayRecords(mockData);
+  }
+
+  function generateMockDataGridData(count) {
+    const statuses = [
+      "Perfect Match",
+      "Fuzzy Match",
+      "No Match",
+      "Partial Match",
+    ];
+    const data = [];
+
+    for (let i = 1; i <= count; i++) {
+      const status = statuses[Math.floor(Math.random() * statuses.length)];
+      const confidence =
+        status === "Perfect Match"
+          ? 100
+          : status === "Fuzzy Match"
+            ? Math.floor(Math.random() * 30) + 70
+            : status === "Partial Match"
+              ? Math.floor(Math.random() * 40) + 50
+              : Math.floor(Math.random() * 20);
+
+      data.push({
+        id: `REC${i.toString().padStart(6, "0")}`,
+        original: generateMockValue(),
+        transformed: generateMockValue(),
+        status: status,
+        confidence: confidence,
+        variance:
+          status === "Perfect Match"
+            ? "0.00%"
+            : `${(Math.random() * 5).toFixed(2)}%`,
+        notes: getStatusNote(status),
+      });
+    }
+
+    return data;
+  }
+
+  function generateMockValue() {
+    const types = ["account", "transaction", "customer"];
+    const type = types[Math.floor(Math.random() * types.length)];
+
+    switch (type) {
+      case "account":
+        return `ACC${Math.floor(Math.random() * 900000) + 100000}`;
+      case "transaction":
+        return `${(Math.random() * 10000).toFixed(2)}`;
+      case "customer":
+        return `CUST${Math.floor(Math.random() * 9000) + 1000}`;
+    }
+  }
+
+  function getStatusNote(status) {
+    const notes = {
+      "Perfect Match": "Exact match found",
+      "Fuzzy Match": "Similar match with high confidence",
+      "Partial Match": "Partial data match",
+      "No Match": "No corresponding record found",
+    };
+    return notes[status] || "";
+  }
+
+  function displayRecords(records) {
+    const tbody = document.getElementById("dataGridBody");
+    const recordCount = document.getElementById("recordCount");
+
+    tbody.innerHTML = records
+      .slice(0, 50)
+      .map(
+        (record) => `
+        <tr>
+            <td><code>${record.id}</code></td>
+            <td>${record.original}</td>
+            <td>${record.transformed}</td>
+            <td>
+                <span class="badge" style="
+                    background-color: ${getMatchStatusColor(record.status)};
+                    color: var(--white);
+                    padding: 0.25rem 0.5rem;
+                    font-size: 0.75rem;
+                ">${record.status}</span>
+            </td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="flex: 1; background-color: var(--light-gray); height: 8px; overflow: hidden;">
+                        <div style="
+                            background-color: ${getConfidenceColor(record.confidence)};
+                            height: 100%;
+                            width: ${record.confidence}%;
+                            transition: width 0.3s ease;
+                        "></div>
+                    </div>
+                    <span style="font-size: 0.875rem; min-width: 35px;">${record.confidence}%</span>
+                </div>
+            </td>
+            <td style="color: ${record.variance === "0.00%" ? "var(--hsbc-teal)" : "var(--hsbc-red)"};">
+                ${record.variance}
+            </td>
+            <td style="font-size: 0.875rem; color: var(--gray);">${record.notes}</td>
+        </tr>
+    `,
+      )
+      .join("");
+
+    recordCount.textContent = formatNumber(records.length);
+  }
+
+  function getMatchStatusColor(status) {
+    switch (status) {
+      case "Perfect Match":
+        return "var(--hsbc-teal)";
+      case "Fuzzy Match":
+        return "var(--hsbc-blue)";
+      case "Partial Match":
+        return "#ffa500";
+      case "No Match":
+        return "var(--hsbc-red)";
+      default:
+        return "var(--gray)";
+    }
+  }
+
+  function getConfidenceColor(confidence) {
+    if (confidence >= 90) return "var(--hsbc-teal)";
+    if (confidence >= 70) return "var(--hsbc-blue)";
+    if (confidence >= 50) return "#ffa500";
+    return "var(--hsbc-red)";
+  }
+
+  function setupGrouping() {
+    const groupSelect = document.getElementById("groupByColumn");
+    groupSelect.addEventListener("change", function () {
+      const groupBy = this.value;
+      if (groupBy) {
+        applyGrouping(groupBy);
+      } else {
+        displayRecords(currentRecords);
+      }
+    });
+  }
+
+  function applyGrouping(groupBy) {
+    let grouped = {};
+
+    currentRecords.forEach((record) => {
+      let key;
+      switch (groupBy) {
+        case "match_status":
+          key = record.status;
+          break;
+        case "confidence_level":
+          key =
+            record.confidence >= 90
+              ? "High (90%+)"
+              : record.confidence >= 70
+                ? "Medium (70-89%)"
+                : record.confidence >= 50
+                  ? "Low (50-69%)"
+                  : "Very Low (<50%)";
+          break;
+        case "dataset_source":
+          key = Math.random() > 0.5 ? "Dataset A" : "Dataset B";
+          break;
+        default:
+          key = "Ungrouped";
+      }
+
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(record);
+    });
+
+    displayGroupedRecords(grouped);
+  }
+
+  function displayGroupedRecords(grouped) {
+    const tbody = document.getElementById("dataGridBody");
+    let html = "";
+
+    Object.entries(grouped).forEach(([group, records]) => {
+      html += `
+            <tr style="background-color: var(--hsbc-primary); color: var(--white);">
+                <td colspan="7" style="font-weight: bold; padding: 1rem;">
+                    <i class="fas fa-layer-group"></i> ${group} (${records.length} records)
+                </td>
+            </tr>
+        `;
+
+      records.slice(0, 20).forEach((record) => {
+        html += `
+                <tr>
+                    <td style="padding-left: 2rem;"><code>${record.id}</code></td>
+                    <td>${record.original}</td>
+                    <td>${record.transformed}</td>
+                    <td>
+                        <span class="badge" style="
+                            background-color: ${getMatchStatusColor(record.status)};
+                            color: var(--white);
+                            padding: 0.25rem 0.5rem;
+                            font-size: 0.75rem;
+                        ">${record.status}</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="flex: 1; background-color: var(--light-gray); height: 8px; overflow: hidden;">
+                                <div style="
+                                    background-color: ${getConfidenceColor(record.confidence)};
+                                    height: 100%;
+                                    width: ${record.confidence}%;
+                                    transition: width 0.3s ease;
+                                "></div>
+                            </div>
+                            <span style="font-size: 0.875rem; min-width: 35px;">${record.confidence}%</span>
+                        </div>
+                    </td>
+                    <td style="color: ${record.variance === "0.00%" ? "var(--hsbc-teal)" : "var(--hsbc-red)"};">
+                        ${record.variance}
+                    </td>
+                    <td style="font-size: 0.875rem; color: var(--gray);">${record.notes}</td>
+                </tr>
+            `;
+      });
+
+      if (records.length > 20) {
+        html += `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 1rem; color: var(--gray); font-style: italic;">
+                        ... and ${records.length - 20} more records in this group
+                    </td>
+                </tr>
+            `;
+      }
+    });
+
+    tbody.innerHTML = html;
+  }
+
+  function loadMoreRecords() {
+    // In a real application, this would load more records from the server
+    const additionalRecords = generateMockDataGridData(50);
+    currentRecords = currentRecords.concat(additionalRecords);
+    displayRecords(currentRecords);
+  }
+
+  function downloadResults() {
+    // In a real application, this would trigger a download
+    alert(
+      "Downloading reconciliation results... This would generate and download a comprehensive report.",
+    );
+  }
+
+  function exportToPDF() {
+    // In a real application, this would generate a PDF report
+    alert(
+      "Exporting to PDF... This would generate a formatted PDF report with charts and data.",
+    );
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,247 @@
+/* Additional custom styles for the Reconciliation Tool */
+
+/* File Upload Enhancements */
+.upload-area.dragover {
+  background-color: var(--hsbc-light) !important;
+  border-color: var(--hsbc-teal) !important;
+  transform: scale(1.02);
+}
+
+.upload-progress {
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-progress::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Data Grid Enhancements */
+.data-grid::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.data-grid::-webkit-scrollbar-track {
+  background: var(--hsbc-light);
+}
+
+.data-grid::-webkit-scrollbar-thumb {
+  background: var(--hsbc-primary);
+  border-radius: 4px;
+}
+
+.data-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--hsbc-teal);
+}
+
+/* Enhanced Card Animations */
+.card {
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(67, 89, 103, 0.15);
+}
+
+/* Status Badge Styles */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 12px;
+}
+
+.status-completed {
+  background-color: var(--hsbc-teal);
+  color: var(--white);
+}
+
+.status-running {
+  background-color: #ffa500;
+  color: var(--white);
+}
+
+.status-failed {
+  background-color: var(--hsbc-red);
+  color: var(--white);
+}
+
+/* Interactive Elements */
+.btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition:
+    width 0.3s ease,
+    height 0.3s ease;
+}
+
+.btn:hover::before {
+  width: 200%;
+  height: 200%;
+}
+
+/* Loading States */
+.loading-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--hsbc-light) 25%,
+    #f0f0f0 50%,
+    var(--hsbc-light) 75%
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Chart Container Enhancements */
+.chart-container {
+  background: linear-gradient(135deg, var(--white) 0%, var(--hsbc-light) 100%);
+  border-radius: 0px;
+  padding: 1rem;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Enhancements */
+@media (max-width: 1200px) {
+  .col-4 {
+    flex: 0 0 50%;
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 0.5rem 1rem;
+  }
+
+  .navbar-nav {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .main-content {
+    padding: 1rem;
+  }
+
+  .modal-content {
+    margin: 1rem;
+    width: calc(100% - 2rem);
+  }
+
+  .data-grid {
+    font-size: 0.875rem;
+  }
+
+  .data-grid th,
+  .data-grid td {
+    padding: 0.5rem;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .navbar,
+  .footer,
+  .btn,
+  .modal {
+    display: none !important;
+  }
+
+  .main-content {
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .card {
+    border: 1px solid #000;
+    box-shadow: none;
+    page-break-inside: avoid;
+  }
+
+  .chart-container {
+    height: 300px !important;
+  }
+}
+
+/* Accessibility Improvements */
+.btn:focus,
+.form-control:focus,
+.form-select:focus {
+  outline: 2px solid var(--hsbc-teal);
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --hsbc-light: #ffffff;
+    --gray: #000000;
+  }
+
+  .card {
+    border: 2px solid #000000;
+  }
+
+  .btn {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

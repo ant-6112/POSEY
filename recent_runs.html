@@ -1,0 +1,507 @@
+{% extends "base.html" %} {% block title %}Recent Runs - Reconciliation Tool{%
+endblock %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1>Recent Reconciliation Runs</h1>
+  <a href="/" class="btn btn-primary">
+    </i>Back to Home</a
+  >
+</div>
+
+<div class="row">
+  <!-- Filters and Search -->
+  <div class="col-3">
+    <div class="card">
+      <div class="card-header">
+        <i class="fas fa-filter"></i> Filters & Logs
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label class="form-label" for="searchRuns">Search Runs</label>
+          <input
+            type="text"
+            id="searchRuns"
+            class="form-control"
+            placeholder="Search by Run ID or dataset..."
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="statusFilter">Status</label>
+          <select id="statusFilter" class="form-control form-select">
+            <option value="">All Statuses</option>
+            <option value="Completed">Completed</option>
+            <option value="Running">Running</option>
+            <option value="Failed">Failed</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="methodFilter">Matching Method</label>
+          <select id="methodFilter" class="form-control form-select">
+            <option value="">All Methods</option>
+            <option value="exact">Exact Match</option>
+            <option value="fuzzy">Fuzzy Match</option>
+            <option value="semantic">Semantic Match</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="dateRange">Date Range</label>
+          <select id="dateRange" class="form-control form-select">
+            <option value="">All Time</option>
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+          </select>
+        </div>
+
+        <hr style="margin: 1rem 0; border-color: var(--hsbc-light)" />
+
+        <h6 style="color: var(--hsbc-primary); margin-bottom: 0.5rem">
+          Block-Based Logs
+        </h6>
+        <div id="blockLogs" style="max-height: 300px; overflow-y: auto">
+          <!-- Block logs will be populated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Runs Display -->
+  <div class="col-9">
+    <br />
+    <div class="card">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+          <span><i class="fas fa-history"></i> Reconciliation Runs </span>
+          &nbsp;&nbsp;&nbsp;
+          <div>
+            <select
+              id="sortRuns"
+              class="form-select"
+              style="
+                display: inline-block;
+                width: auto;
+                padding: 0.25rem 0.5rem;
+                font-size: 0.875rem;
+                border-radius: 0px;
+              "
+            >
+              <option value="timestamp">Sort by Date</option>
+              <option value="duration">Sort by Duration</option>
+              <option value="match_rate">Sort by Match Rate</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 0">
+        <div id="runsContainer">
+          <div class="text-center p-3">
+            <i
+              class="fas fa-spinner fa-spin"
+              style="font-size: 2rem; color: var(--hsbc-primary)"
+            ></i>
+            <p>Loading runs...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Run Details Modal -->
+<div id="runDetailsModal" class="modal">
+  <div class="modal-content" style="max-width: 800px">
+    <div class="modal-header">
+      <h3>Run Details</h3>
+      <button class="modal-close" onclick="hideModal('runDetailsModal')">
+        &times;
+      </button>
+    </div>
+    <div class="modal-body" id="runDetailsContent">
+      <!-- Run details will be populated here -->
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_scripts %}
+<script>
+  let allRuns = [];
+  let filteredRuns = [];
+
+  document.addEventListener("DOMContentLoaded", function () {
+    loadRuns();
+    setupFilters();
+  });
+
+  async function loadRuns() {
+    try {
+      const runs = await apiCall("/api/runs");
+      allRuns = runs;
+      filteredRuns = [...runs];
+      renderRuns(filteredRuns);
+      renderBlockLogs(filteredRuns);
+    } catch (error) {
+      console.error("Failed to load runs:", error);
+      document.getElementById("runsContainer").innerHTML = `
+            <div class="text-center p-3">
+                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: var(--hsbc-red);"></i>
+                <p style="color: var(--hsbc-red);">Failed to load runs</p>
+            </div>
+        `;
+    }
+  }
+
+  function renderRuns(runs) {
+    const container = document.getElementById("runsContainer");
+
+    if (runs.length === 0) {
+      container.innerHTML = `
+            <div class="text-center p-3">
+                <i class="fas fa-history" style="font-size: 3rem; color: var(--gray);"></i>
+                <h3 style="color: var(--gray); margin-top: 1rem;">No runs found</h3><br/>
+            </div>
+        `;
+      return;
+    }
+
+    container.innerHTML = runs
+      .map(
+        (run) => `
+        <div class="run-item" style="
+            padding: 1rem;
+            border-bottom: 1px solid var(--hsbc-light);
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        " onclick="viewRunDetails('${run.id}')" onmouseover="this.style.backgroundColor='var(--hsbc-light)'" onmouseout="this.style.backgroundColor='transparent'">
+            <div class="row">
+                <div class="col-3">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-play-circle" style="color: var(--hsbc-teal); font-size: 1.5rem;"></i>
+                        <div>
+                            <h5 style="margin: 0; color: var(--hsbc-primary);">Run ${run.id.substring(0, 8)}</h5>
+                            <small style="color: var(--gray);">${run.id}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-4">
+                    <div>
+                        <strong style="color: var(--hsbc-primary);">Datasets:</strong><br>
+                        <i class="fas fa-database" style="color: var(--hsbc-teal);"></i> ${run.dataset1}<br>
+                        <i class="fas fa-exchange-alt" style="color: var(--hsbc-blue);"></i> ${run.dataset2}
+                    </div>
+                </div>
+
+                <div class="col-2">
+                    <div>
+                        <strong style="color: var(--hsbc-primary);">Method:</strong><br>
+                        <span class="badge" style="background-color: var(--hsbc-blue); color: var(--white); padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                            ${run.matching_method}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="col-2">
+                    <div>
+                        <strong style="color: var(--hsbc-primary);">Status:</strong><br>
+                        <span class="badge ${getStatusClass(run.status)}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--white);">
+                            ${run.status}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="col-1 text-right">
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.2rem; font-weight: bold; color: var(--hsbc-teal);">
+                            ${run.result_summary ? Math.round(run.result_summary.match_rate) + "%" : "N/A"}
+                        </div>
+                        <small style="color: var(--gray);">Match Rate</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-6">
+                    <small style="color: var(--gray);">
+                        <i class="fas fa-clock"></i> ${formatDate(run.timestamp)}
+                    </small>
+                </div>
+                <div class="col-6 text-right">
+                    <small style="color: var(--gray);">
+                        <i class="fas fa-stopwatch"></i> Duration: ${run.duration}
+                    </small>
+                </div>
+            </div>
+        </div>
+    `,
+      )
+      .join("");
+  }
+
+  function renderBlockLogs(runs) {
+    const container = document.getElementById("blockLogs");
+
+    if (runs.length === 0) {
+      container.innerHTML =
+        '<p style="color: var(--gray); font-size: 0.875rem;">No logs available</p>';
+      return;
+    }
+
+    container.innerHTML = runs
+      .slice(0, 10)
+      .map(
+        (run) => `
+        <div class="log-block" style="
+            background-color: var(--white);
+            border: 1px solid var(--hsbc-light);
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        " onclick="viewRunDetails('${run.id}')" onmouseover="this.style.borderColor='var(--hsbc-teal)'" onmouseout="this.style.borderColor='var(--hsbc-light)'">
+            <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.25rem;">
+                <strong style="font-size: 0.875rem; color: var(--hsbc-primary);">${run.id.substring(0, 8)}</strong>
+                <span class="badge ${getStatusClass(run.status)}" style="padding: 0.125rem 0.25rem; font-size: 0.625rem; color: var(--white);">
+                    ${run.status}
+                </span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--gray); margin-bottom: 0.25rem;">
+                <i class="fas fa-database"></i> ${run.dataset1} ↔ ${run.dataset2}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--gray); margin-bottom: 0.25rem;">
+                <i class="fas fa-cog"></i> ${run.matching_method}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--gray);">
+                <i class="fas fa-clock"></i> ${new Date(run.timestamp).toLocaleString()}
+            </div>
+            ${
+              run.duration
+                ? `<div style="font-size: 0.75rem; color: var(--gray);">
+                <i class="fas fa-stopwatch"></i> ${run.duration}
+            </div>`
+                : ""
+            }
+        </div>
+    `,
+      )
+      .join("");
+  }
+
+  function getStatusClass(status) {
+    switch (status) {
+      case "Completed":
+        return "badge-success";
+      case "Running":
+        return "badge-warning";
+      case "Failed":
+        return "badge-error";
+      default:
+        return "badge-secondary";
+    }
+  }
+
+  function getStatusColor(status) {
+    switch (status) {
+      case "Completed":
+        return "var(--hsbc-teal)";
+      case "Running":
+        return "#ffa500";
+      case "Failed":
+        return "var(--hsbc-red)";
+      default:
+        return "var(--hsbc-primary)";
+    }
+  }
+
+  // Add CSS for badge classes
+  const style = document.createElement("style");
+  style.textContent = `
+    .badge-success { background-color: var(--hsbc-teal) !important; }
+    .badge-warning { background-color: #ffa500 !important; }
+    .badge-error { background-color: var(--hsbc-red) !important; }
+    .badge-secondary { background-color: var(--hsbc-primary) !important; }
+`;
+  document.head.appendChild(style);
+
+  function setupFilters() {
+    const searchInput = document.getElementById("searchRuns");
+    const statusFilter = document.getElementById("statusFilter");
+    const methodFilter = document.getElementById("methodFilter");
+    const dateRangeFilter = document.getElementById("dateRange");
+    const sortSelect = document.getElementById("sortRuns");
+
+    function applyFilters() {
+      const searchTerm = searchInput.value.toLowerCase();
+      const status = statusFilter.value;
+      const method = methodFilter.value;
+      const dateRange = dateRangeFilter.value;
+      const sortBy = sortSelect.value;
+
+      // Filter
+      filteredRuns = allRuns.filter((run) => {
+        const matchesSearch =
+          run.id.toLowerCase().includes(searchTerm) ||
+          run.dataset1.toLowerCase().includes(searchTerm) ||
+          run.dataset2.toLowerCase().includes(searchTerm);
+        const matchesStatus = !status || run.status === status;
+        const matchesMethod = !method || run.matching_method === method;
+        const matchesDateRange =
+          !dateRange || isWithinDateRange(run.timestamp, dateRange);
+
+        return (
+          matchesSearch && matchesStatus && matchesMethod && matchesDateRange
+        );
+      });
+
+      // Sort
+      filteredRuns.sort((a, b) => {
+        switch (sortBy) {
+          case "duration":
+            // Simple duration comparison (assuming format like "2m 34s")
+            return parseDuration(b.duration) - parseDuration(a.duration);
+          case "match_rate":
+            const aRate = a.result_summary ? a.result_summary.match_rate : 0;
+            const bRate = b.result_summary ? b.result_summary.match_rate : 0;
+            return bRate - aRate;
+          case "timestamp":
+          default:
+            return new Date(b.timestamp) - new Date(a.timestamp);
+        }
+      });
+
+      renderRuns(filteredRuns);
+      renderBlockLogs(filteredRuns);
+    }
+
+    searchInput.addEventListener("input", applyFilters);
+    statusFilter.addEventListener("change", applyFilters);
+    methodFilter.addEventListener("change", applyFilters);
+    dateRangeFilter.addEventListener("change", applyFilters);
+    sortSelect.addEventListener("change", applyFilters);
+  }
+
+  function isWithinDateRange(timestamp, range) {
+    const date = new Date(timestamp);
+    const now = new Date();
+
+    switch (range) {
+      case "today":
+        return date.toDateString() === now.toDateString();
+      case "week":
+        const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+        return date >= weekAgo;
+      case "month":
+        const monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        return date >= monthAgo;
+      default:
+        return true;
+    }
+  }
+
+  function parseDuration(duration) {
+    if (!duration) return 0;
+    // Parse duration like "2m 34s" to seconds
+    const matches = duration.match(/(\d+)m?\s*(\d+)s?/);
+    if (matches) {
+      const minutes = parseInt(matches[1]) || 0;
+      const seconds = parseInt(matches[2]) || 0;
+      return minutes * 60 + seconds;
+    }
+    return 0;
+  }
+
+  async function viewRunDetails(runId) {
+    try {
+      const run = await apiCall(`/api/runs/${runId}`);
+      showRunDetailsModal(run);
+    } catch (error) {
+      console.error("Failed to load run details:", error);
+      alert("Failed to load run details");
+    }
+  }
+
+  function showRunDetailsModal(run) {
+    const content = document.getElementById("runDetailsContent");
+
+    content.innerHTML = `
+        <div class="row mb-3">
+            <div class="col-6">
+                <h4 style="color: var(--hsbc-primary);">Run Information</h4>
+                <p><strong>Run ID:</strong> <code>${run.id}</code></p>
+                <p><strong>Status:</strong> <span class="badge ${getStatusClass(run.status)}" style="color: var(--white); padding: 0.25rem 0.5rem;">${run.status}</span></p>
+                <p><strong>Started:</strong> ${formatDate(run.timestamp)}</p>
+                <p><strong>Duration:</strong> ${run.duration}</p>
+                <p><strong>Matching Method:</strong> ${run.matching_method}</p>
+                ${run.num_cdes ? `<p><strong>Number of CDEs:</strong> ${run.num_cdes}</p>` : ""}
+            </div>
+            <div class="col-6">
+                <h4 style="color: var(--hsbc-primary);">Datasets</h4>
+                <p><strong>Original Dataset:</strong> ${run.dataset1}</p>
+                <p><strong>Transformed Dataset:</strong> ${run.dataset2}</p>
+            </div>
+        </div>
+
+        ${
+          run.result_summary
+            ? `
+        <div class="mb-3">
+            <h4 style="color: var(--hsbc-primary);">Results Summary</h4>
+            <div class="row">
+                <div class="col-3 text-center">
+                    <div style="font-size: 2rem; font-weight: bold; color: var(--hsbc-teal);">
+                        ${formatNumber(run.result_summary.total_records)}
+                    </div>
+                    <small style="color: var(--gray);">Total Records</small>
+                </div>
+                <div class="col-3 text-center">
+                    <div style="font-size: 2rem; font-weight: bold; color: var(--hsbc-teal);">
+                        ${formatNumber(run.result_summary.matched_records)}
+                    </div>
+                    <small style="color: var(--gray);">Matched Records</small>
+                </div>
+                <div class="col-3 text-center">
+                    <div style="font-size: 2rem; font-weight: bold; color: var(--hsbc-red);">
+                        ${formatNumber(run.result_summary.unmatched_records)}
+                    </div>
+                    <small style="color: var(--gray);">Unmatched Records</small>
+                </div>
+                <div class="col-3 text-center">
+                    <div style="font-size: 2rem; font-weight: bold; color: var(--hsbc-primary);">
+                        ${run.result_summary.match_rate.toFixed(2)}%
+                    </div>
+                    <small style="color: var(--gray);">Match Rate</small>
+                </div>
+            </div>
+        </div>`
+            : ""
+        }
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" onclick="window.location.href='/results/${run.id}'">
+                <i class="fas fa-chart-bar"></i> View Full Results
+            </button>
+            <button class="btn btn-outline" onclick="downloadResults('${run.id}')">
+                <i class="fas fa-download"></i> Download Results
+            </button>
+            <button class="btn btn-secondary" onclick="rerunReconciliation('${run.id}')">
+                <i class="fas fa-redo"></i> Re-run
+            </button>
+        </div>
+    `;
+
+    showModal("runDetailsModal");
+  }
+
+  function downloadResults(runId) {
+    // In a real application, this would trigger a download
+    alert(
+      `Downloading results for run ${runId} - This would download the results as a ZIP file`,
+    );
+  }
+
+  function rerunReconciliation(runId) {
+    // In a real application, this would copy the run configuration to a new run
+    window.location.href = `/?rerun=${runId}`;
+  }
+</script>
+{% endblock %}

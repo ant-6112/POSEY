@@ -1,0 +1,465 @@
+{% extends "base.html" %} {% block title %}Dashboard - Reconciliation Tool{%
+endblock %} {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1>Data Transformation Control</h1>
+  <button class="btn btn-primary" onclick="showModal('newRunModal')">
+    <i class="fas fa-plus"></i> New Run
+  </button>
+</div>
+
+<div class="row" style="height: 70vh">
+  <div class="col-6">
+    <div class="card" style="height: 100%">
+      <div class="card-header">
+        <i class="fas fa-database"></i> Recent Uploaded Datasets
+        <button
+          class="btn btn-outline"
+          style="float: right; padding: 0.25rem 0.75rem; font-size: 0.875rem"
+          onclick="showModal('uploadModal')"
+        >
+          <i class="fas fa-upload"></i> Upload
+        </button>
+      </div>
+      <div class="card-body" style="overflow-y: auto">
+        <div id="datasetsContainer">
+          <div class="text-center p-3">
+            <i
+              class="fas fa-spinner fa-spin"
+              style="font-size: 2rem; color: var(--hsbc-primary)"
+            ></i>
+            <p>Loading datasets...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6">
+    <div class="card" style="height: 100%">
+      <div class="card-header"><i class="fas fa-history"></i> Recent Runs</div>
+      <div class="card-body" style="overflow-y: auto">
+        <div id="recentRunsContainer">
+          <div class="text-center p-3">
+            <i
+              class="fas fa-spinner fa-spin"
+              style="font-size: 2rem; color: var(--hsbc-primary)"
+            ></i>
+            <p>Loading recent runs...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="newRunModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Create New Reconciliation Run</h3>
+      <button class="modal-close" onclick="hideModal('newRunModal')">
+        &times;
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="newRunForm">
+        <div class="form-group">
+          <label class="form-label" for="dataset1">Original Dataset</label>
+          <select id="dataset1" class="form-control form-select" required>
+            <option value="">Select original dataset...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="dataset2">Transformed Dataset</label>
+          <select id="dataset2" class="form-control form-select" required>
+            <option value="">Select transformed dataset...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="matchingMethod"
+            >Column Matching Method</label
+          >
+          <select
+            id="matchingMethod"
+            class="form-control form-select"
+            required
+            title="Choose how columns should be matched between datasets"
+          >
+            <option value="">Select matching method...</option>
+            <option value="exact">Exact Match</option>
+            <option value="fuzzy">Fuzzy Match</option>
+            <option value="semantic">Semantic Match</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="numCdes"
+            >Number of CDEs (Optional)</label
+          >
+          <input
+            type="number"
+            id="numCdes"
+            class="form-control"
+            min="0"
+            placeholder="Enter number of Common Data Elements"
+          />
+        </div>
+
+        <div class="d-flex justify-content-between mt-3">
+          <button
+            type="button"
+            class="btn btn-outline"
+            onclick="hideModal('newRunModal')"
+          >
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">
+            Start Reconciliation
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="uploadModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Upload Dataset</h3>
+      <button class="modal-close" onclick="hideModal('uploadModal')">
+        &times;
+      </button>
+    </div>
+    <div class="modal-body">
+      <div
+        class="upload-area"
+        id="uploadArea"
+        style="
+          border: 2px dashed var(--hsbc-primary);
+          padding: 2rem;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        "
+      >
+        <i
+          class="fas fa-cloud-upload-alt"
+          style="
+            font-size: 3rem;
+            color: var(--hsbc-primary);
+            margin-bottom: 1rem;
+          "
+        ></i>
+        <p style="margin-bottom: 1rem">
+          Drag and drop your CSV file here, or click to browse
+        </p>
+        <input type="file" id="fileInput" accept=".csv" style="display: none" />
+        <button
+          type="button"
+          class="btn btn-outline"
+          onclick="document.getElementById('fileInput').click()"
+        >
+          Choose File
+        </button>
+      </div>
+      <div id="uploadProgress" style="display: none; margin-top: 1rem">
+        <div
+          style="
+            background-color: var(--light-gray);
+            height: 20px;
+            overflow: hidden;
+          "
+        >
+          <div
+            id="progressBar"
+            style="
+              background-color: var(--hsbc-teal);
+              height: 100%;
+              width: 0%;
+              transition: width 0.3s ease;
+            "
+          ></div>
+        </div>
+        <p id="progressText" style="margin-top: 0.5rem; text-align: center">
+          Uploading...
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block extra_scripts %}
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    loadDashboardData();
+    setupFileUpload();
+    setupNewRunForm();
+  });
+
+  async function loadDashboardData() {
+    try {
+      // Load datasets
+      const datasets = await apiCall("/api/datasets");
+      renderDatasets(datasets);
+      populateDatasetSelects(datasets);
+
+      // Load recent runs
+      const runs = await apiCall("/api/runs");
+      renderRecentRuns(runs);
+    } catch (error) {
+      console.error("Failed to load dashboard data:", error);
+    }
+  }
+
+  function renderDatasets(datasets) {
+    const container = document.getElementById("datasetsContainer");
+
+    if (datasets.length === 0) {
+      container.innerHTML = `
+            <div class="text-center p-3">
+                <i class="fas fa-database" style="font-size: 2rem; color: var(--gray);"></i>
+                <br/><br/>
+                <p style="color: var(--gray);">No Datasets Found</p><br/>
+                <button class="btn btn-primary" onclick="showModal('uploadModal')">Upload Dataset</button>
+            </div>
+        `;
+      return;
+    }
+
+    container.innerHTML = datasets
+      .map(
+        (dataset) => `
+        <div class="card mb-3" style="margin-bottom: 1rem;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div style="line-height: 1.25rem;">
+                        <h4 style="margin: 0; color: var(--hsbc-primary);">${dataset.name}</h4>
+                        <p style="margin: 0.25rem 0; color: var(--gray); font-size: 0.875rem;">
+                            <i class="fas fa-user"></i> ${dataset.uploaded_by}&nbsp; • &nbsp;
+                            <i class="fas fa-play"></i> ${dataset.runs_count} runs
+                        </p>
+                        <p style="margin: 0; color: var(--gray); font-size: 0.75rem;">
+                            <i class="fas fa-clock"></i> ${formatDate(dataset.upload_date)}
+                        </p>
+                    </div>
+                    <div>
+                        <i class="fas fa-database" style="font-size: 2rem; color: var(--hsbc-teal);"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `,
+      )
+      .join("");
+  }
+
+  function renderRecentRuns(runs) {
+    const container = document.getElementById("recentRunsContainer");
+
+    if (runs.length === 0) {
+      container.innerHTML = `
+            <div class="text-center p-3">
+                <i class="fas fa-history" style="font-size: 2rem; color: var(--gray);"></i>
+                <br/><br/>
+                <p style="color: var(--gray);">No Past Runs Found</p><br/>
+                <button class="btn btn-primary" onclick="showModal('newRunModal')">New Run</button>
+            </div>
+        `;
+      return;
+    }
+
+    container.innerHTML = runs
+      .slice(0, 10)
+      .map(
+        (run) => `
+        <div class="card mb-3" style="margin-bottom: 1rem; cursor: pointer;" onclick="viewRunResults('${run.id}')">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div style="flex: 1;">
+                        <h4 style="margin: 0; color: var(--hsbc-primary);">${run.id.substring(0, 8)}...</h4>
+                        <p style="margin: 0.25rem 0; color: var(--gray); font-size: 0.875rem;">
+                            <i class="fas fa-database"></i> ${run.dataset1} vs ${run.dataset2}
+                        </p>
+                        <p style="margin: 0.25rem 0; color: var(--gray); font-size: 0.875rem;">
+                            <i class="fas fa-cog"></i> ${run.matching_method} •
+                            <i class="fas fa-clock"></i> ${run.duration}
+                        </p>
+                        <p style="margin: 0; color: var(--gray); font-size: 0.75rem;">
+                            ${formatDate(run.timestamp)}
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <span class="badge ${run.status === "Completed" ? "badge-success" : "badge-warning"}" style="
+                            padding: 0.25rem 0.5rem;
+                            font-size: 0.75rem;
+                            background-color: ${run.status === "Completed" ? "var(--hsbc-teal)" : "var(--hsbc-red)"};
+                            color: var(--white);
+                        ">${run.status}</span>
+                        <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--gray);">
+                            ${run.result_summary ? `${run.result_summary.match_rate}% match` : ""}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `,
+      )
+      .join("");
+  }
+
+  function populateDatasetSelects(datasets) {
+    const dataset1Select = document.getElementById("dataset1");
+    const dataset2Select = document.getElementById("dataset2");
+
+    const options = datasets
+      .map(
+        (dataset) => `<option value="${dataset.name}">${dataset.name}</option>`,
+      )
+      .join("");
+
+    dataset1Select.innerHTML =
+      '<option value="">Select original dataset...</option>' + options;
+    dataset2Select.innerHTML =
+      '<option value="">Select transformed dataset...</option>' + options;
+  }
+
+  function setupFileUpload() {
+    const uploadArea = document.getElementById("uploadArea");
+    const fileInput = document.getElementById("fileInput");
+
+    uploadArea.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      uploadArea.style.backgroundColor = "var(--hsbc-light)";
+      uploadArea.style.borderColor = "var(--hsbc-teal)";
+    });
+
+    uploadArea.addEventListener("dragleave", function (e) {
+      e.preventDefault();
+      uploadArea.style.backgroundColor = "transparent";
+      uploadArea.style.borderColor = "var(--hsbc-primary)";
+    });
+
+    uploadArea.addEventListener("drop", function (e) {
+      e.preventDefault();
+      uploadArea.style.backgroundColor = "transparent";
+      uploadArea.style.borderColor = "var(--hsbc-primary)";
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFileUpload(files[0]);
+      }
+    });
+
+    uploadArea.addEventListener("click", function () {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", function (e) {
+      if (e.target.files.length > 0) {
+        handleFileUpload(e.target.files[0]);
+      }
+    });
+  }
+
+  async function handleFileUpload(file) {
+    if (!file.name.endsWith(".csv")) {
+      alert("Please select a CSV file");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const progressDiv = document.getElementById("uploadProgress");
+    const progressBar = document.getElementById("progressBar");
+    const progressText = document.getElementById("progressText");
+
+    progressDiv.style.display = "block";
+    progressBar.style.width = "0%";
+    progressText.textContent = "Uploading...";
+
+    try {
+      // Simulate upload progress
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += Math.random() * 30;
+        if (progress > 90) progress = 90;
+        progressBar.style.width = progress + "%";
+        progressText.textContent = `Uploading... ${Math.round(progress)}%`;
+      }, 200);
+
+      const response = await fetch("/api/datasets/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+
+      if (response.ok) {
+        progressBar.style.width = "100%";
+        progressText.textContent = "Upload complete!";
+
+        setTimeout(() => {
+          hideModal("uploadModal");
+          progressDiv.style.display = "none";
+          fileInput.value = "";
+          loadDashboardData(); // Refresh the dashboard
+        }, 1000);
+      } else {
+        throw new Error("Upload failed");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      progressText.textContent = "Upload failed!";
+      progressBar.style.backgroundColor = "var(--hsbc-red)";
+    }
+  }
+
+  function setupNewRunForm() {
+    const form = document.getElementById("newRunForm");
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const formData = {
+        dataset1: document.getElementById("dataset1").value,
+        dataset2: document.getElementById("dataset2").value,
+        matching_method: document.getElementById("matchingMethod").value,
+        num_cdes: document.getElementById("numCdes").value || 0,
+      };
+
+      try {
+        const submitButton = form.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        submitButton.innerHTML =
+          '<i class="fas fa-spinner fa-spin"></i> Starting...';
+
+        const result = await apiCall("/api/runs/create", {
+          method: "POST",
+          body: JSON.stringify(formData),
+        });
+
+        hideModal("newRunModal");
+        form.reset();
+        loadDashboardData(); // Refresh the dashboard
+
+        // Show success message
+        alert(
+          `Reconciliation run started successfully! Run ID: ${result.id.substring(0, 8)}`,
+        );
+      } catch (error) {
+        console.error("Failed to create run:", error);
+        alert("Failed to start reconciliation run");
+      } finally {
+        const submitButton = form.querySelector('button[type="submit"]');
+        submitButton.disabled = false;
+        submitButton.innerHTML = "Start Reconciliation";
+      }
+    });
+  }
+
+  function viewRunResults(runId) {
+    window.location.href = `/results/${runId}`;
+  }
+</script>
+{% endblock %}
