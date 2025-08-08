@@ -1,6 +1,14 @@
 {% extends "base.html" %} {% block title %}Dashboard - Reconciliation Tool{%
 endblock %} {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div
+  class="d-flex justify-content-between align-items-center mb-3"
+  style="
+    background: linear-gradient(-120deg, #ffffff, #000000, #db0011);
+    color: white;
+    height: 100px;
+    padding: 20px;
+  "
+>
   <h1>Data Transformation Control</h1>
   <button class="btn btn-primary" onclick="showModal('newRunModal')">
     <i class="fas fa-plus"></i> New Run
@@ -27,7 +35,7 @@ endblock %} {% block content %}
               class="fas fa-spinner fa-spin"
               style="font-size: 2rem; color: var(--hsbc-primary)"
             ></i>
-            <p>Loading datasets...</p>
+            <p>Loading Datasets...</p>
           </div>
         </div>
       </div>
@@ -44,7 +52,7 @@ endblock %} {% block content %}
               class="fas fa-spinner fa-spin"
               style="font-size: 2rem; color: var(--hsbc-primary)"
             ></i>
-            <p>Loading recent runs...</p>
+            <p>Loading Recent Runs...</p>
           </div>
         </div>
       </div>
@@ -65,14 +73,14 @@ endblock %} {% block content %}
         <div class="form-group">
           <label class="form-label" for="dataset1">Original Dataset</label>
           <select id="dataset1" class="form-control form-select" required>
-            <option value="">Select original dataset...</option>
+            <option value="">Choose Original Dataset...</option>
           </select>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="dataset2">Transformed Dataset</label>
           <select id="dataset2" class="form-control form-select" required>
-            <option value="">Select transformed dataset...</option>
+            <option value="">Choose Transformed Dataset...</option>
           </select>
         </div>
 
@@ -86,10 +94,11 @@ endblock %} {% block content %}
             required
             title="Choose how columns should be matched between datasets"
           >
-            <option value="">Select matching method...</option>
-            <option value="exact">Exact Match</option>
+            <option value="">Select Matching Method...</option>
             <option value="fuzzy">Fuzzy Match</option>
-            <option value="semantic">Semantic Match</option>
+            <option value="cosine">Cosine Similarity (ML)</option>
+            <option value="unique">Unique Values</option>
+            <option value="columnnames">Column Names</option>
           </select>
         </div>
 
@@ -101,8 +110,8 @@ endblock %} {% block content %}
             type="number"
             id="numCdes"
             class="form-control"
-            min="0"
-            placeholder="Enter number of Common Data Elements"
+            min="1"
+            placeholder="Enter Number of Common Data Elements"
           />
         </div>
 
@@ -188,6 +197,116 @@ endblock %} {% block content %}
     </div>
   </div>
 </div>
+
+<div
+  class="modal-overlay"
+  style="display: none; text-align: center; justify-content: center"
+>
+  <div class="cde-modal">
+    <div class="modal-header">
+      <h2><i class="fas fa-search"></i> Common Data Elements Matching</h2>
+      <button class="modal-close" onclick="closeCDEModal()">&times;</button>
+    </div>
+
+    <div class="run-details">
+      <div class="detail-item">
+        <div class="detail-label">Dataset 1</div>
+        <div class="detail-value" id="dataset1Name"></div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Dataset 2</div>
+        <div class="detail-value" id="dataset2Name"></div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Number of CDEs</div>
+        <div class="detail-value" id="numberCdes">3</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">CDE Algorithm</div>
+        <div class="detail-value" id="cdeAlgorithm">Unique Values</div>
+      </div>
+    </div>
+
+    <div class="content-section">
+      <div id="loadingState" class="loading-state" style="display: none">
+        <i class="fas fa-spinner loading-spinner"></i>
+        <div>Analyzing Columns and Finding Matches...</div>
+      </div>
+
+      <div
+        id="resultsContent"
+        style="flex: 1; display: flex; flex-direction: column"
+      >
+        <div class="section-title">
+          <i class="fas fa-table"></i> Discovered Column Matches
+          <span
+            style="
+              margin-left: auto;
+              font-size: 12px;
+              font-weight: normal;
+              color: var(--text-light);
+            "
+            >Select matches to use as CDEs</span
+          >
+        </div>
+
+        <div class="cde-table-container">
+          <table class="cde-table">
+            <thead>
+              <tr>
+                <th class="checkbox-cell">Select</th>
+                <th>Dataset 1 Column</th>
+                <th>Dataset 2 Column</th>
+                <th style="text-align: center; width: 120px">Similarity</th>
+              </tr>
+            </thead>
+            <tbody id="cdeTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="selected-cdes">
+          <div class="section-title">
+            <i class="fas fa-tags"></i> Selected CDEs
+            <span
+              id="selectedCount"
+              style="
+                margin-left: 8px;
+                font-size: 12px;
+                font-weight: normal;
+                color: var(--text-light);
+              "
+              >(0/5 selected)</span
+            >
+          </div>
+          <div class="pills-container" id="selectedPills">
+            <div class="pills-placeholder">No CDEs selected yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <div style="font-size: 12px; color: var(--text-light)">
+        <i class="fas fa-info-circle"></i> Top matches are auto-selected based
+        on similarity scores
+      </div>
+      <div style="display: flex; gap: 12px">
+        <button class="btn btn-secondary" onclick="closeCDEModal()">
+          Cancel
+        </button>
+        <button
+          class="btn btn-primary"
+          id="proceedBtn"
+          onclick="proceedWithReconciliation()"
+          disabled
+        >
+          Proceed with Reconciliation
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %} {% block extra_scripts %}
 
 <script>
@@ -197,14 +316,143 @@ endblock %} {% block content %}
     setupNewRunForm();
   });
 
+  let sampleCDEMatches = [
+    ["customer_id", "cust_id", 0.95],
+    ["first_name", "fname", 0.87],
+    ["last_name", "lname", 0.89],
+    ["email_address", "email", 0.92],
+    ["phone_number", "phone", 0.85],
+    ["date_of_birth", "birth_date", 0.78],
+    ["address_line1", "street_address", 0.71],
+    ["city", "city_name", 0.82],
+    ["postal_code", "zip_code", 0.88],
+  ];
+
+  let selectedCDEs = new Set();
+  let maxCDEs = document.getElementById("numCdes").value || 3;
+  let current_run = {};
+
+  function initializeCDEModal(runDetails) {
+    document.getElementById("dataset1Name").textContent = runDetails.dataset1;
+    document.getElementById("dataset2Name").textContent = runDetails.dataset2;
+    document.getElementById("numberCdes").textContent = runDetails.num_cdes;
+    document.getElementById("cdeAlgorithm").textContent =
+      runDetails.matching_method;
+    maxCDEs = parseInt(runDetails.num_cdes) || 3;
+
+    document.getElementById("loadingState").style.display = "flex";
+    document.getElementById("resultsContent").style.display = "none";
+
+    setTimeout(() => {
+      const tbody = document.getElementById("cdeTableBody");
+      tbody.innerHTML = sampleCDEMatches
+        .map((match, i) => {
+          const [col1, col2, sim] = match;
+          const cls =
+            sim >= 0.8
+              ? "similarity-high"
+              : sim >= 0.6
+                ? "similarity-medium"
+                : "similarity-low";
+          return `<tr><td class="checkbox-cell"><input type="checkbox" class="checkbox-input" onchange="toggleCDESelection(${i}, this.checked)" id="cde-${i}"></td>
+                        <td>${col1}</td><td>${col2}</td><td style="text-align: center;"><span class="similarity-score ${cls}">${(sim * 100).toFixed(1)}%</span></td></tr>`;
+        })
+        .join("");
+
+      sampleCDEMatches
+        .map((m, i) => ({ i, s: m[2] }))
+        .sort((a, b) => b.s - a.s)
+        .slice(0, maxCDEs)
+        .forEach(({ i }) => {
+          document.getElementById(`cde-${i}`).checked = true;
+          toggleCDESelection(i, true);
+        });
+
+      document.getElementById("loadingState").style.display = "none";
+      document.getElementById("resultsContent").style.display = "flex";
+    }, 2000);
+  }
+
+  function toggleCDESelection(index, isSelected) {
+    const match = sampleCDEMatches[index];
+    const key = `${match[0]}_${match[1]}`;
+    const row = document.querySelector(`#cde-${index}`).closest("tr");
+
+    if (isSelected && selectedCDEs.size < maxCDEs) {
+      selectedCDEs.add(key);
+      row.classList.add("selected");
+    } else if (isSelected) {
+      document.getElementById(`cde-${index}`).checked = false;
+      return;
+    } else {
+      selectedCDEs.delete(key);
+      row.classList.remove("selected");
+    }
+
+    const container = document.getElementById("selectedPills");
+    const count = document.getElementById("selectedCount");
+    count.textContent = `(${selectedCDEs.size}/${maxCDEs} selected)`;
+
+    if (selectedCDEs.size === 0) {
+      container.innerHTML =
+        '<div class="pills-placeholder">No CDEs selected yet</div>';
+    } else {
+      container.innerHTML = Array.from(selectedCDEs)
+        .map((key) => {
+          const match = sampleCDEMatches.find((m) => `${m[0]}_${m[1]}` === key);
+          return match
+            ? `<div class="cde-pill">${match[0]} ↔ ${match[1]} <button class="pill-remove" onclick="removeCDEPill('${key}')">×</button></div>`
+            : "";
+        })
+        .join("");
+    }
+
+    document.getElementById("proceedBtn").disabled = selectedCDEs.size === 0;
+  }
+
+  function removeCDEPill(key) {
+    selectedCDEs.delete(key);
+    const match = sampleCDEMatches.find((m) => `${m[0]}_${m[1]}` === key);
+    if (match) {
+      const i = sampleCDEMatches.indexOf(match);
+      const checkbox = document.getElementById(`cde-${i}`);
+      if (checkbox) {
+        checkbox.checked = false;
+        checkbox.closest("tr").classList.remove("selected");
+      }
+    }
+    toggleCDESelection(0, false); // Trigger UI update
+  }
+
+  function closeCDEModal() {
+    selectedCDEs.clear();
+    document.querySelector(".modal-overlay").style.display = "none";
+  }
+
+  async function proceedWithReconciliation() {
+    const selected = Array.from(selectedCDEs).map((key) =>
+      sampleCDEMatches.find((m) => `${m[0]}_${m[1]}` === key),
+    );
+
+    current_run["selected"] = selected;
+
+    const runResult = await apiCall("/api/runs/create", {
+      method: "POST",
+      body: JSON.stringify(current_run),
+    });
+
+    console.log("Proceeding with CDEs:", selected);
+    alert(`Reconciliation started with ${selected.length} selected CDEs!`);
+    closeCDEModal();
+    loadDashboardData();
+  }
+
   async function loadDashboardData() {
     try {
-      // Load datasets
       const datasets = await apiCall("/api/datasets");
       renderDatasets(datasets);
       populateDatasetSelects(datasets);
 
-      // Load recent runs
       const runs = await apiCall("/api/runs");
       renderRecentRuns(runs);
     } catch (error) {
@@ -319,9 +567,9 @@ endblock %} {% block content %}
       .join("");
 
     dataset1Select.innerHTML =
-      '<option value="">Select original dataset...</option>' + options;
+      '<option value="">Choose Original Dataset...</option>' + options;
     dataset2Select.innerHTML =
-      '<option value="">Select transformed dataset...</option>' + options;
+      '<option value="">Choose Transformed Dataset...</option>' + options;
   }
 
   function setupFileUpload() {
@@ -425,8 +673,12 @@ endblock %} {% block content %}
         dataset1: document.getElementById("dataset1").value,
         dataset2: document.getElementById("dataset2").value,
         matching_method: document.getElementById("matchingMethod").value,
-        num_cdes: document.getElementById("numCdes").value || 0,
+        num_cdes: document.getElementById("numCdes").value || 3,
       };
+
+      selectedCDEs = new Set();
+      maxCDEs = document.getElementById("numCdes").value || 3;
+      current_run = formData;
 
       try {
         const submitButton = form.querySelector('button[type="submit"]');
@@ -434,19 +686,31 @@ endblock %} {% block content %}
         submitButton.innerHTML =
           '<i class="fas fa-spinner fa-spin"></i> Starting...';
 
-        const result = await apiCall("/api/runs/create", {
+        const result = await apiCall("/api/runs/createcde", {
           method: "POST",
           body: JSON.stringify(formData),
         });
 
-        hideModal("newRunModal");
-        form.reset();
-        loadDashboardData(); // Refresh the dashboard
+        maxCDEs = document.getElementById("numCdes").value;
+        sampleCDEMatches = result["common_columns"];
+        results = result;
 
-        // Show success message
-        alert(
-          `Reconciliation run started successfully! Run ID: ${result.id.substring(0, 8)}`,
-        );
+        hideModal("newRunModal");
+
+        initializeCDEModal({
+          dataset1: document.getElementById("dataset1").value,
+          dataset2: document.getElementById("dataset2").value,
+          num_cdes: document.getElementById("numCdes").value || 3,
+          matching_method: document
+            .getElementById("matchingMethod")
+            .value.toUpperCase(),
+        });
+
+        document.querySelector(".modal-overlay").style.display = "flex";
+
+        loadDashboardData();
+
+        form.reset();
       } catch (error) {
         console.error("Failed to create run:", error);
         alert("Failed to start reconciliation run");

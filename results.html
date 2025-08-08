@@ -320,11 +320,9 @@ endblock %} {% block extra_head %}
     const runId = "{{ run_id }}";
 
     try {
-      // Load run details
       runData = await apiCall(`/api/runs/${runId}`);
       renderRunConfig(runData);
 
-      // Load results data
       resultsData = await apiCall(`/api/runs/${runId}/results`);
       renderMetrics(resultsData);
       renderCharts(resultsData);

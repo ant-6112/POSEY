@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import uuid
 from datetime import datetime
 
@@ -43,13 +44,38 @@ def get_datasets():
                 df = pd.read_csv(file_path)
                 table = pa.Table.from_pandas(df)
                 data = table.to_pylist()
+                stat = os.stat(file_path)
+
+                # details = file_path.split("_")
+                # id = file_path[0]
+                # name = details[1]
+                # uploaded_by = details[2]
+                # upload_date = details[4]
+
+                datasets.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "name": filename.replace(".csv", ""),
+                        "uploaded_by": CURRENT_USER["name"],
+                        "runs_count": 0,
+                        "upload_date": datetime.fromtimestamp(
+                            stat.st_mtime
+                        ).isoformat(),
+                        "data": data,
+                    }
+                )
+            elif filename.endswith(".xlsx"):
+                file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                df = pd.read_excel(file_path)
+                table = pa.Table.from_pandas(df)
+                data = table.to_pylist()
 
                 stat = os.stat(file_path)
                 datasets.append(
                     {
                         "id": str(uuid.uuid4()),
-                        "name": filename.replace(".csv", ""),
-                        "uploaded_by": "John Doe",
+                        "name": filename.replace(".xlsx", ""),
+                        "uploaded_by": CURRENT_USER["name"],
                         "runs_count": 0,
                         "upload_date": datetime.fromtimestamp(
                             stat.st_mtime
@@ -75,6 +101,42 @@ def upload_dataset():
             if request.form.get("name") != ""
             else secure_filename(file.filename)
         )
+
+        id = str(uuid.uuid4())
+        uploaded_by = CURRENT_USER["name"]
+        runs_count = 0
+        upload_date = datetime.now().isoformat()
+
+        # filename = (
+        #     filename
+        #     + "_"
+        #     + id
+        #     + "_"
+        #     + uploaded_by.replace(" ", "")
+        #     + "_"
+        #     + upload_date
+        #     + ".csv"
+        # )
+        file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        file.save(file_path)
+
+        return jsonify(
+            {
+                "id": id,
+                "name": request.form.get("name")
+                if request.form.get("name") != ""
+                else filename.replace(".csv", ""),
+                "uploaded_by": uploaded_by,
+                "runs_count": 0,
+                "upload_date": upload_date,
+            }
+        )
+    elif file and file.filename.endswith(".xlsx"):
+        filename = (
+            request.form.get("name") + ".xlsx"
+            if request.form.get("name") != ""
+            else secure_filename(file.filename)
+        )
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(file_path)
 
@@ -83,7 +145,7 @@ def upload_dataset():
                 "id": str(uuid.uuid4()),
                 "name": request.form.get("name")
                 if request.form.get("name") != ""
-                else filename.replace(".csv", ""),
+                else filename.replace(".xlsx", ""),
                 "uploaded_by": CURRENT_USER["name"],
                 "runs_count": 0,
                 "upload_date": datetime.now().isoformat(),
@@ -106,25 +168,85 @@ def get_runs():
     return jsonify(sorted(runs, key=lambda x: x["timestamp"], reverse=True))
 
 
+def find_common_columns(dataset1, dataset2):
+    columns1 = dataset1.columns
+    columns2 = dataset2.columns
+
+    common_columns = set(columns1).intersection(set(columns2))
+
+    result = [[col, col, 1.0] for col in common_columns]
+
+    return result
+
+
+@app.route("/api/runs/createcde", methods=["POST"])
+def createcde():
+    try:
+        data = request.get_json()
+
+        dataset1 = pd.read_csv(
+            os.path.join(app.config["UPLOAD_FOLDER"], data["dataset1"]) + ".csv"
+        )
+        dataset2 = pd.read_csv(
+            os.path.join(app.config["UPLOAD_FOLDER"], data["dataset2"]) + ".csv"
+        )
+
+        common_columns = find_common_columns(dataset1, dataset2)
+
+        run_data = {
+            "dataset1": data.get("dataset1"),
+            "dataset2": data.get("dataset2"),
+            "matching_method": data.get("matching_method"),
+            "num_cdes": data.get("num_cdes", 0),
+            "timestamp": datetime.now().isoformat(),
+            "common_columns": common_columns,
+        }
+
+        return jsonify(run_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/runs/create", methods=["POST"])
 def create_run():
+    start = time.time()
     data = request.get_json()
 
     run_id = str(uuid.uuid4())
+
+    dataset1 = pd.read_csv(
+        os.path.join(app.config["UPLOAD_FOLDER"], data["dataset1"]) + ".csv"
+    )
+    dataset2 = pd.read_csv(
+        os.path.join(app.config["UPLOAD_FOLDER"], data["dataset2"]) + ".csv"
+    )
+
+    table1 = pa.Table.from_pandas(dataset1)
+    table2 = pa.Table.from_pandas(dataset2)
+    data1 = table1.to_pylist()
+    data2 = table2.to_pylist()
+    merged_data = data1
+
+    end = time.time()
+
     run_data = {
         "id": run_id,
         "dataset1": data.get("dataset1"),
         "dataset2": data.get("dataset2"),
         "matching_method": data.get("matching_method"),
-        "num_cdes": data.get("num_cdes", 0),
+        "num_cdes": data.get("num_cdes", 3),
         "timestamp": datetime.now().isoformat(),
+        "data1": data1,
+        "data2": data2,
+        "merged": merged_data,
         "status": "Completed",
-        "duration": "2m 34s",
+        "duration": f"{end - start:.2f} seconds",
+        "selected": data.get("selected", []),
+        "threshold": 0.1,
         "result_summary": {
-            "total_records": 10000,
-            "matched_records": 9856,
-            "unmatched_records": 144,
-            "match_rate": 98.56,
+            "total_records": 0,
+            "total_anamolies": 0,
+            "% of anaomlies": 0,
         },
     }
 
@@ -147,7 +269,6 @@ def get_run(run_id):
 
 @app.route("/api/runs/<run_id>/results", methods=["GET"])
 def get_run_results(run_id):
-    # Mock results data
     results = {
         "summary": {
             "total_records": 10000,
